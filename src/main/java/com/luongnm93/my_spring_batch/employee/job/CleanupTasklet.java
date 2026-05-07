@@ -14,7 +14,7 @@ public class CleanupTasklet implements Tasklet {
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
         String tempPath = chunkContext.getStepContext()
                 .getStepExecution().getJobExecution().getExecutionContext()
-                .getString(DecompressTasklet.TEMP_FILE_PATH_KEY);
+                .getString(DecompressTasklet.TEMP_FILE_PATH_KEY, null);
 
         if (tempPath != null) {
             Files.deleteIfExists(Path.of(tempPath));
