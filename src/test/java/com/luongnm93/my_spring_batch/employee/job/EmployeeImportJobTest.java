@@ -1,7 +1,8 @@
 package com.luongnm93.my_spring_batch.employee.job;
 
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
@@ -11,13 +12,13 @@ import org.springframework.batch.test.JobRepositoryTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
-import org.springframework.core.io.ClassPathResource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @SpringBatchTest
 @SpringBootTest
 @ActiveProfiles("test")
@@ -42,46 +43,34 @@ class EmployeeImportJobTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @BeforeEach
-    void cleanUp() {
+    private JobExecution sharedExecution;
+
+    @BeforeAll
+    void runJob() throws Exception {
         jobRepositoryTestUtils.removeJobExecutions();
         jdbcTemplate.execute("DELETE FROM employees");
-    }
 
-    @Test
-    void jobCompletesSuccessfully() throws Exception {
         JobParameters params = new JobParametersBuilder()
                 .addString("filePath", TEST_FILE_PATH)
                 .addLong("startedAt", System.currentTimeMillis())
                 .toJobParameters();
 
-        JobExecution execution = jobLauncherTestUtils.launchJob(params);
-
-        assertThat(execution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+        sharedExecution = jobLauncherTestUtils.launchJob(params);
     }
 
     @Test
-    void jobInsertsAllRowsFromCsv() throws Exception {
-        JobParameters params = new JobParametersBuilder()
-                .addString("filePath", TEST_FILE_PATH)
-                .addLong("startedAt", System.currentTimeMillis())
-                .toJobParameters();
+    void jobCompletesSuccessfully() {
+        assertThat(sharedExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
+    }
 
-        jobLauncherTestUtils.launchJob(params);
-
+    @Test
+    void jobInsertsAllRowsFromCsv() {
         int count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM employees", Integer.class);
         assertThat(count).isEqualTo(3);
     }
 
     @Test
-    void jobMapsFieldsCorrectly() throws Exception {
-        JobParameters params = new JobParametersBuilder()
-                .addString("filePath", TEST_FILE_PATH)
-                .addLong("startedAt", System.currentTimeMillis())
-                .toJobParameters();
-
-        jobLauncherTestUtils.launchJob(params);
-
+    void jobMapsFieldsCorrectly() {
         String firstName = jdbcTemplate.queryForObject(
                 "SELECT first_name FROM employees WHERE employee_id = 'EMP-000001'", String.class);
         assertThat(firstName).isEqualTo("John");
@@ -96,15 +85,8 @@ class EmployeeImportJobTest {
     }
 
     @Test
-    void jobWritesReadCountToStepExecution() throws Exception {
-        JobParameters params = new JobParametersBuilder()
-                .addString("filePath", TEST_FILE_PATH)
-                .addLong("startedAt", System.currentTimeMillis())
-                .toJobParameters();
-
-        JobExecution execution = jobLauncherTestUtils.launchJob(params);
-
-        long readCount = execution.getStepExecutions().stream()
+    void jobWritesReadCountToStepExecution() {
+        long readCount = sharedExecution.getStepExecutions().stream()
                 .filter(se -> se.getStepName().contains(":partition"))
                 .mapToLong(se -> se.getReadCount())
                 .sum();
