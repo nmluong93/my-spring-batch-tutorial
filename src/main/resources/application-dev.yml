@@ -1,0 +1,3 @@
+batch:
+  upload:
+    directory: ${user.home}/my-spring-batch/uploads
